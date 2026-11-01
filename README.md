@@ -134,4 +134,3 @@ Configure the following variables in your cloud provider dashboard:
 2. **Frontend Service**:
    - Point to `frontend/Dockerfile` (or deploy as a Static Site with build command `npm install && npm run build`, publish directory `dist`, and `VITE_API_BASE_URL=https://your-backend-service.onrender.com`).
 3. Never commit `.env` or expose `JWT_SECRET_KEY` in frontend environment variables (`VITE_*`).
-
