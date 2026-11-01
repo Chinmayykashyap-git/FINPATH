@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Database & Large Binary Artifacts
+backend/data/*.db
+backend/data/*.db-journal
+ml/artifacts/*.joblib
+ml/artifacts/transactions_200k.csv
+
+# Node / Frontend
+frontend/node_modules/
+frontend/.vite/
+finpath-ai.zip
+
+# Environment & OS
+.env
+.env.local
+.DS_Store
+Thumbs.db
+

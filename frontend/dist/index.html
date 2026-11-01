@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinPath AI — Enterprise Transaction Intelligence Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    body { background-color: #0B1120; color: #F8FAFC; font-family: 'Inter', system-ui, sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0B1120; }
+    ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-[#0B1120] text-[#F8FAFC] antialiased">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const TOKEN_KEY = 'finpath_jwt_token';
+    const getStoredToken = () => localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    const setStoredToken = (t, rem = true) => {
+      if (rem) { localStorage.setItem(TOKEN_KEY, t); sessionStorage.removeItem(TOKEN_KEY); }
+      else { sessionStorage.setItem(TOKEN_KEY, t); localStorage.removeItem(TOKEN_KEY); }
+    };
+    const clearStoredToken = () => { localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); };
+
+    async function apiFetch(path, options = {}) {
+      const token = getStoredToken();
+      const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(path, { ...options, headers });
+      if (!res.ok) {
+        let msg = `Request failed (${res.status})`;
+        try { const j = await res.json(); if (j.detail) msg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } catch {}
+        throw new Error(msg);
+      }
+      return res.json();
+    }
+
+    const InfoTip = ({ title, what, how, why }) => {
+      const [open, setOpen] = useState(false);
+      return (
+        <div className="relative inline-flex" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+          <button type="button" onClick={() => setOpen(!open)} className="px-2 py-0.5 rounded bg-[#1E293B] text-[11px] font-mono text-[#22D3EE] hover:bg-[#334155]">
+            i
+          </button>
+          {open && (
+            <div className="absolute right-0 top-7 z-50 w-80 p-3.5 rounded-lg bg-[#0F172A] border border-[#334155] shadow-2xl text-xs space-y-1.5 text-left">
+              <div className="font-semibold text-[#22D3EE] border-b border-[#1E293B] pb-1">{title}</div>
+              <div><span className="text-[#94A3B8]">What it represents: </span><span>{what}</span></div>
+              {how && <div><span className="text-[#94A3B8]">How to interpret: </span><span>{how}</span></div>}
+              {why && <div><span className="text-[#94A3B8]">Why it matters: </span><span>{why}</span></div>}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ----------------- LOGIN PAGE ----------------- */
+    const LoginScreen = ({ onAuthSuccess }) => {
+      const [mode, setMode] = useState('login');
+      const [fullName, setFullName] = useState('');
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [confirmPassword, setConfirmPassword] = useState('');
+      const [showPass, setShowPass] = useState(false);
+      const [remember, setRemember] = useState(true);
+      const [forgot, setForgot] = useState(false);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState(null);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError(null);
+        if (mode === 'register' && password !== confirmPassword) {
+          setError('Passwords do not match.');
+          return;
+        }
+        setLoading(true);
+        try {
+          const res = mode === 'login'
+            ? await apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password, remember_me: remember }) })
+            : await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify({ full_name: fullName, email, password }) });
+          setStoredToken(res.access_token, remember);
+          onAuthSuccess(res.user);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleDemo = async () => {
+        setError(null);
+        setLoading(true);
+        try {
+          const res = await apiFetch('/api/auth/demo', { method: 'POST' });
+          setStoredToken(res.access_token, false);
+          onAuthSuccess(res.user);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="min-h-screen bg-[#0B1120] flex flex-col lg:flex-row">
+          <div className="lg:w-7/12 p-8 lg:p-16 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-[#1E293B] bg-[#101827]/70">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#3B82F6]/20 border border-[#3B82F6]/40 flex items-center justify-center font-bold text-[#22D3EE]">FP</div>
+                <div>
+                  <span className="text-lg font-bold tracking-tight">FINPATH <span className="text-[#22D3EE]">AI</span></span>
+                  <span className="block text-[10px] uppercase tracking-widest text-[#94A3B8]">Transaction Intelligence Platform</span>
+                </div>
+              </div>
+              <div className="mt-14 max-w-xl space-y-5">
+                <span className="inline-block px-3 py-1 rounded-full bg-[#151F30] border border-[#1E293B] text-xs text-[#22D3EE]">Enterprise Payment Telemetry & ML Diagnostics</span>
+                <h1 className="text-3xl lg:text-5xl font-bold tracking-tight leading-tight">
+                  Understand Every Transaction. <span className="text-[#3B82F6]">Predict Every Failure.</span>
+                </h1>
+                <p className="text-base text-[#94A3B8] leading-relaxed">
+                  An AI-powered transaction intelligence and failure prediction platform that analyzes transaction performance, predicts transaction success, identifies potential failure points, and generates actionable operational insights.
+                </p>
+              </div>
+              <div className="mt-10 grid sm:grid-cols-3 gap-4 max-w-2xl">
+                <div className="p-4 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-1.5">
+                  <div className="text-xs font-mono text-[#22C55E]">01 / OUTCOME</div>
+                  <h3 className="text-sm font-semibold">Predict transaction outcomes.</h3>
+                  <p className="text-xs text-[#94A3B8]">Random Forest ensemble evaluates latency and system load to estimate completion probability.</p>
+                </div>
+                <div className="p-4 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-1.5">
+                  <div className="text-xs font-mono text-[#22D3EE]">02 / ATTRIBUTION</div>
+                  <h3 className="text-sm font-semibold">Identify failure points.</h3>
+                  <p className="text-xs text-[#94A3B8]">Multi-class Failure Node Analyzer isolates User, Server, or Bank gateway bottlenecks.</p>
+                </div>
+                <div className="p-4 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-1.5">
+                  <div className="text-xs font-mono text-[#3B82F6]">03 / INSIGHTS</div>
+                  <h3 className="text-sm font-semibold">Discover operational bottlenecks.</h3>
+                  <p className="text-xs text-[#94A3B8]">Explore 200,000 simulated transactions with hourly heatmaps and live simulation.</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-10 pt-6 border-t border-[#1E293B] flex justify-between text-xs text-[#94A3B8]">
+              <span>200,000 Simulated Transactions Analyzed</span>
+              <span className="font-mono text-[#22D3EE]">Scikit-Learn Random Forest Pipeline (Seed: 42)</span>
+            </div>
+          </div>
+
+          <div className="lg:w-5/12 p-8 flex items-center justify-center">
+            <div className="w-full max-w-md p-8 rounded-2xl bg-[#151F30] border border-[#1E293B] shadow-2xl space-y-5">
+              <div>
+                <h2 className="text-2xl font-bold">{mode === 'login' ? 'Sign in to FinPath AI' : 'Create Analyst Account'}</h2>
+                <p className="text-xs text-[#94A3B8] mt-1">Sign in with your account or launch an instant demo session.</p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#0B1120] border border-[#3B82F6]/40 space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-[#22D3EE] font-semibold">Instant Demo Access</span>
+                  <span className="text-[#94A3B8] font-mono">1-Click Sandbox</span>
+                </div>
+                <button type="button" onClick={handleDemo} disabled={loading} className="w-full py-2.5 px-4 rounded-lg bg-[#3B82F6] hover:bg-[#2563EB] text-xs font-semibold text-white transition">
+                  {loading ? 'Starting Session...' : 'Launch Interactive Demo Workspace →'}
+                </button>
+              </div>
+
+              {error && <div className="p-3 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/40 text-xs text-[#EF4444]">{error}</div>}
+              {forgot && <div className="p-3 rounded-lg bg-[#3B82F6]/15 border border-[#3B82F6]/40 text-xs text-[#94A3B8]">Use the <strong className="text-[#22D3EE]">Launch Interactive Demo Workspace</strong> button above or register a new analyst account below.</div>}
+
+              <form onSubmit={handleSubmit} className="space-y-3.5">
+                {mode === 'register' && (
+                  <div>
+                    <label className="block text-xs text-[#94A3B8] mb-1">Full Name</label>
+                    <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Alex Rivera" className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#1E293B] text-sm" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs text-[#94A3B8] mb-1">Email Address</label>
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="analyst@finpath.ai" className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#1E293B] text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#94A3B8] mb-1">Password</label>
+                  <div className="flex gap-2">
+                    <input type={showPass ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#1E293B] text-sm" />
+                    <button type="button" onClick={() => setShowPass(!showPass)} className="px-3 rounded-lg bg-[#0B1120] border border-[#1E293B] text-xs text-[#94A3B8]">{showPass ? 'Hide' : 'Show'}</button>
+                  </div>
+                </div>
+                {mode === 'register' && (
+                  <div>
+                    <label className="block text-xs text-[#94A3B8] mb-1">Confirm Password</label>
+                    <input type={showPass ? 'text' : 'password'} required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#1E293B] text-sm" />
+                  </div>
+                )}
+                {mode === 'login' && (
+                  <div className="flex justify-between items-center text-xs text-[#94A3B8]">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+                      <span>Remember me</span>
+                    </label>
+                    <button type="button" onClick={() => setForgot(!forgot)} className="text-[#3B82F6] hover:underline">Forgot password?</button>
+                  </div>
+                )}
+                <button type="submit" disabled={loading} className="w-full py-2.5 rounded-lg bg-[#1E293B] hover:bg-[#334155] border border-[#3B82F6]/30 text-sm font-semibold">
+                  {mode === 'login' ? 'Sign In' : 'Create Account'}
+                </button>
+              </form>
+
+              <div className="text-center text-xs text-[#94A3B8]">
+                {mode === 'login' ? (
+                  <span>Need an account? <button onClick={() => setMode('register')} className="text-[#22D3EE] underline">Register here</button></span>
+                ) : (
+                  <span>Already have an account? <button onClick={() => setMode('login')} className="text-[#22D3EE] underline">Sign in</button></span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    /* ----------------- OVERVIEW TAB ----------------- */
+    const OverviewTab = ({ onNavigate }) => {
+      const [summary, setSummary] = useState(null);
+      const [charts, setCharts] = useState(null);
+      const [win, setWin] = useState({ start: 0, end: 23, label: 'All Hours (00:00–23:00)' });
+
+      useEffect(() => {
+        Promise.all([
+          apiFetch('/api/dashboard/summary'),
+          apiFetch(`/api/dashboard/charts?start_hour=${win.start}&end_hour=${win.end}`)
+        ]).then(([s, c]) => { setSummary(s); setCharts(c); });
+      }, [win]);
+
+      if (!summary || !charts) return <div className="p-8 text-sm text-[#94A3B8] animate-pulse">Loading real-time dataset metrics from FastAPI...</div>;
+      const k = summary.kpis;
+      const maxHrTotal = Math.max(...charts.hourly_volume.map(h => h.total), 1);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold">Transaction Intelligence</h1>
+              <p className="text-xs text-[#94A3B8]">Monitor transaction performance, identify operational bottlenecks, and understand transaction failure patterns.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <select
+                onChange={(e) => {
+                  const opts = [
+                    { start: 0, end: 23, label: 'All Hours (00:00–23:00)' },
+                    { start: 8, end: 17, label: 'Business Hours (08:00–17:00)' },
+                    { start: 18, end: 22, label: 'Peak Evening (18:00–22:00)' },
+                    { start: 0, end: 7, label: 'Overnight (00:00–07:00)' },
+                  ];
+                  setWin(opts[Number(e.target.value)]);
+                }}
+                className="px-3 py-2 rounded-lg bg-[#151F30] border border-[#1E293B] text-xs"
+              >
+                <option value="0">All Hours (00:00–23:00)</option>
+                <option value="1">Business Hours (08:00–17:00)</option>
+                <option value="2">Peak Evening (18:00–22:00)</option>
+                <option value="3">Overnight (00:00–07:00)</option>
+              </select>
+              <button onClick={() => onNavigate('simulator')} className="px-3.5 py-2 rounded-lg bg-[#3B82F6] text-xs font-semibold">Open Simulator</button>
+            </div>
+          </div>
+
+          {/* 7 KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3.5">
+            <div onClick={() => onNavigate('transactions')} className="cursor-pointer p-4 rounded-xl bg-[#151F30] border border-[#1E293B] hover:border-[#3B82F6]">
+              <div className="text-xs text-[#94A3B8]">1. Total Transactions</div>
+              <div className="text-xl font-bold font-mono mt-1">{k.total_transactions.toLocaleString()}</div>
+              <div className="text-[11px] text-[#22D3EE] mt-1">Simulated 24h Corpus</div>
+            </div>
+            <div onClick={() => onNavigate('transactions', { status: 'success' })} className="cursor-pointer p-4 rounded-xl bg-[#151F30] border border-[#1E293B] hover:border-[#22C55E]">
+              <div className="text-xs text-[#94A3B8]">2. Successful Tx</div>
+              <div className="text-xl font-bold font-mono text-[#22C55E] mt-1">{k.successful_transactions.toLocaleString()}</div>
+              <div className="text-[11px] text-[#94A3B8] mt-1">Click to view successful</div>
+            </div>
+            <div onClick={() => onNavigate('transactions', { status: 'failed' })} className="cursor-pointer p-4 rounded-xl bg-[#151F30] border border-[#1E293B] hover:border-[#EF4444]">
+              <div className="text-xs text-[#94A3B8]">3. Failed Transactions</div>
+              <div className="text-xl font-bold font-mono text-[#EF4444] mt-1">{k.failed_transactions.toLocaleString()}</div>
+              <div className="text-[11px] text-[#EF4444] mt-1">{k.failure_rate}% failure rate →</div>
+            </div>
+            <div className="p-4 rounded-xl bg-[#151F30] border border-[#1E293B]">
+              <div className="text-xs text-[#94A3B8]">4. Success Rate</div>
+              <div className="text-xl font-bold font-mono text-[#22D3EE] mt-1">{k.success_rate}%</div>
+              <div className="text-[11px] text-[#F59E0B] mt-1">Peak: {k.comparisons.peak_window_success_rate}%</div>
+            </div>
+            <div className="p-4 rounded-xl bg-[#151F30] border border-[#1E293B]">
+              <div className="text-xs text-[#94A3B8]">5. Avg User Latency</div>
+              <div className="text-xl font-bold font-mono mt-1">{k.avg_user_latency} ms</div>
+              <div className="text-[11px] text-[#94A3B8] mt-1">+{k.comparisons.failed_vs_success_user_latency_delta}ms on fail</div>
+            </div>
+            <div onClick={() => onNavigate('failure-intel')} className="cursor-pointer p-4 rounded-xl bg-[#151F30] border border-[#1E293B] hover:border-[#F59E0B]">
+              <div className="text-xs text-[#94A3B8]">6. Avg Server Latency</div>
+              <div className="text-xl font-bold font-mono text-[#F59E0B] mt-1">{k.avg_server_latency} ms</div>
+              <div className="text-[11px] text-[#EF4444] mt-1">+{k.comparisons.failed_vs_success_server_latency_delta}ms on fail</div>
+            </div>
+            <div onClick={() => onNavigate('bank-insights')} className="cursor-pointer p-4 rounded-xl bg-[#151F30] border border-[#1E293B] hover:border-[#22D3EE]">
+              <div className="text-xs text-[#94A3B8]">7. Avg Bank Latency</div>
+              <div className="text-xl font-bold font-mono text-[#22D3EE] mt-1">{k.avg_bank_latency} ms</div>
+              <div className="text-[11px] text-[#F59E0B] mt-1">+{k.comparisons.failed_vs_success_bank_latency_delta}ms on fail</div>
+            </div>
+          </div>
+
+          {/* 5 Interactive Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Chart B: Hourly Volume */}
+            <div className="lg:col-span-2 p-5 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-sm font-bold">B. Transaction Volume Over Time ({win.label})</h3>
+                  <p className="text-xs text-[#94A3B8]">Hourly distribution of successful (green) and failed (red) transactions</p>
+                </div>
+                <InfoTip title="Hourly Transaction Volume" what="Hourly transaction throughput split by outcome." how="Tall red segments during hours 18–22 show evening failure concentration." why="Guides capacity planning and maintenance scheduling." />
+              </div>
+              <div className="h-52 flex items-end gap-1.5 pt-4 border-b border-[#1E293B]">
+                {charts.hourly_volume.map(h => (
+                  <div key={h.hour} className="flex-1 flex flex-col items-center group relative">
+                    <div className="w-full flex flex-col justify-end h-44 bg-[#0B1120] rounded-t overflow-hidden">
+                      <div style={{ height: `${(h.failed / maxHrTotal) * 100}%` }} className="bg-[#EF4444] w-full" title={`${h.hour_label} Failed: ${h.failed}`} />
+                      <div style={{ height: `${(h.successful / maxHrTotal) * 100}%` }} className="bg-[#22C55E]/80 w-full" title={`${h.hour_label} Success: ${h.successful}`} />
+                    </div>
+                    <span className="text-[10px] font-mono text-[#94A3B8] mt-1">{String(h.hour).padStart(2, '0')}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="text-xs text-[#94A3B8]">Caption: Evening hours (18:00–22:00 UTC) exhibit elevated failure rates (~14.5%) compared with ~10.8% off-peak.</div>
+            </div>
+
+            {/* Chart A: Success vs Failure */}
+            <div className="p-5 rounded-xl bg-[#151F30] border border-[#1E293B] flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-sm font-bold">A. Transaction Success vs Failure</h3>
+                  <p className="text-xs text-[#94A3B8]">Outcome split for selected time window</p>
+                </div>
+                <InfoTip title="Success vs Failure" what="Proportion of completed vs failed transactions." how="Compare green (Succeeded) vs red (Failed) share." why="Baseline reliability KPI for payment operations." />
+              </div>
+              <div className="space-y-4 my-4">
+                {charts.success_vs_failure.map(item => (
+                  <div key={item.name} className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-semibold">
+                      <span>{item.name}</span>
+                      <span className="font-mono" style={{ color: item.color }}>{item.count.toLocaleString()} ({item.percentage}%)</span>
+                    </div>
+                    <div className="w-full h-4 rounded-full bg-[#0B1120] overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${item.percentage}%`, backgroundColor: item.color }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-xs text-[#94A3B8] border-t border-[#1E293B] pt-3">Caption: Shows exact transaction outcome counts populated from the FastAPI backend.</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Chart C: Failure by Component */}
+            <div className="p-5 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-sm font-bold">C. Failure Distribution by Component</h3>
+                  <p className="text-xs text-[#94A3B8]">User vs Server vs Bank failure attribution</p>
+                </div>
+                <InfoTip title="Failure by Component" what="Distribution of failed transactions across Server, Bank, and User nodes." how="Server is the primary bottleneck (~62.5%), followed by Bank (~28.8%)." why="Prioritizes engineering remediation." />
+              </div>
+              <div className="space-y-3">
+                {charts.failure_by_component.map(c => (
+                  <div key={c.component} className="p-3 rounded-lg bg-[#0B1120] border border-[#1E293B] space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-semibold">{c.component} Component</span>
+                      <span className="font-mono text-[#22D3EE]">{c.failures.toLocaleString()} ({c.percentage}%)</span>
+                    </div>
+                    <div className="w-full h-2.5 rounded-full bg-[#151F30]">
+                      <div className="h-full rounded-full bg-[#3B82F6]" style={{ width: `${c.percentage}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Chart D: Latency Analysis */}
+            <div className="p-5 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-sm font-bold">D. Component Latency Analysis (ms)</h3>
+                  <p className="text-xs text-[#94A3B8]">Successful mean vs Failed mean & P95</p>
+                </div>
+                <InfoTip title="Latency Analysis" what="Compares mean latency on successful vs failed transactions." how="Failed transactions have significantly higher Server and Bank latencies." why="Quantifies latency thresholds (>90ms Server, >80ms Bank)." />
+              </div>
+              <div className="space-y-3">
+                {charts.latency_analysis.map(l => (
+                  <div key={l.component} className="p-3 rounded-lg bg-[#0B1120] border border-[#1E293B] text-xs space-y-1">
+                    <div className="font-semibold text-[#F8FAFC] flex justify-between">
+                      <span>{l.component} Layer</span>
+                      <span className="font-mono text-[#94A3B8]">Threshold: {l.threshold}ms</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[11px]">
+                      <div><span className="text-[#94A3B8] block">Success</span><span className="text-[#22C55E]">{l.success_mean}ms</span></div>
+                      <div><span className="text-[#94A3B8] block">Failed</span><span className="text-[#EF4444] font-bold">{l.failure_mean}ms</span></div>
+                      <div><span className="text-[#94A3B8] block">P95 Tail</span><span className="text-[#22D3EE]">{l.p95}ms</span></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Chart E: System Load Analysis */}
+            <div className="p-5 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-sm font-bold">E. System Load Analysis</h3>
+                  <p className="text-xs text-[#94A3B8]">Failure rate across concurrent load tiers</p>
+                </div>
+                <InfoTip title="System Load Analysis" what="Transaction failure rate across system load buckets (10k–25k req/s)." how="Failure rate jumps sharply when load exceeds 20,000 req/s." why="Defines safe concurrency limits." />
+              </div>
+              <div className="space-y-2">
+                {charts.system_load_analysis.map(b => (
+                  <div key={b.bucket} className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-[#94A3B8]">{b.bucket}</span>
+                      <span className="font-mono font-semibold text-[#F59E0B]">{b.failure_rate}% fail ({b.failed.toLocaleString()})</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-[#0B1120]">
+                      <div className="h-full rounded-full bg-[#EF4444]" style={{ width: `${Math.min(100, b.failure_rate * 3.5)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    /* ----------------- TRANSACTION MONITOR TAB ----------------- */
+    const TransactionsTab = ({ initialFilter }) => {
+      const [search, setSearch] = useState(initialFilter?.search || '');
+      const [status, setStatus] = useState(initialFilter?.status || 'all');
+      const [predStatus, setPredStatus] = useState('all');
+      const [node, setNode] = useState('all');
+      const [page, setPage] = useState(1);
+      const [data, setData] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [detail, setDetail] = useState(null);
+
+      useEffect(() => {
+        const q = new URLSearchParams({ page: String(page), page_size: '15' });
+        if (search) q.set('search', search);
+        if (status !== 'all') q.set('status_filter', status);
+        if (predStatus !== 'all') q.set('predicted_filter', predStatus);
+        if (node !== 'all') q.set('failed_node', node);
+        apiFetch(`/api/transactions?${q.toString()}`).then(setData);
+      }, [search, status, predStatus, node, page]);
+
+      const inspectTx = (tx) => {
+        setSelected(tx);
+        setDetail(null);
+        apiFetch(`/api/transactions/${tx.finpath_id}`).then(setDetail);
+      };
+
+      const exportCsv = async () => {
+        const token = getStoredToken();
+        const res = await fetch(`/api/transactions/export?status_filter=${status}&failed_node=${node}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'finpath_transactions.csv'; a.click();
+      };
+
+      return (
+        <div className="space-y-5">
+          <div className="flex flex-wrap justify-between items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold">Transaction Monitor</h1>
+              <p className="text-xs text-[#94A3B8]">Explore individual transactions and investigate the operational conditions associated with their outcomes.</p>
+            </div>
+            <button onClick={exportCsv} className="px-4 py-2 rounded-lg bg-[#3B82F6] text-xs font-semibold">Export CSV</button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-[#151F30] border border-[#1E293B]">
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search ID (e.g. FP-00000015)..." className="px-3 py-2 rounded-lg bg-[#0B1120] border border-[#1E293B] text-xs" />
+            <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="px-3 py-2 rounded-lg bg-[#0B1120] border border-[#1E293B] text-xs">
+              <option value="all">Actual Status: All</option>
+              <option value="success">Actual: Successful</option>
+              <option value="failed">Actual: Failed</option>
+            </select>
+            <select value={predStatus} onChange={e => { setPredStatus(e.target.value); setPage(1); }} className="px-3 py-2 rounded-lg bg-[#0B1120] border border-[#1E293B] text-xs">
+              <option value="all">Predicted Status: All</option>
+              <option value="success">Predicted: Success</option>
+              <option value="failed">Predicted: Failed</option>
+            </select>
+            <select value={node} onChange={e => { setNode(e.target.value); setPage(1); }} className="px-3 py-2 rounded-lg bg-[#0B1120] border border-[#1E293B] text-xs">
+              <option value="all">Failure Component: All</option>
+              <option value="Server">Server</option>
+              <option value="Bank">Bank</option>
+              <option value="User">User</option>
+              <option value="None">None</option>
+            </select>
+          </div>
+
+          <div className="rounded-xl bg-[#151F30] border border-[#1E293B] overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#101827] border-b border-[#1E293B] text-[#94A3B8] uppercase text-[11px]">
+                <tr>
+                  <th className="py-3 px-4">Transaction ID</th>
+                  <th className="py-3 px-3">Time</th>
+                  <th className="py-3 px-3">User Lat</th>
+                  <th className="py-3 px-3">Server Lat</th>
+                  <th className="py-3 px-3">Bank Lat</th>
+                  <th className="py-3 px-3">System Load</th>
+                  <th className="py-3 px-3">Actual Status</th>
+                  <th className="py-3 px-3">Predicted Status</th>
+                  <th className="py-3 px-3">Failure Component</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#1E293B]">
+                {!data ? (
+                  <tr><td colSpan="9" className="p-8 text-center text-[#94A3B8]">Loading transactions...</td></tr>
+                ) : data.items.map(tx => (
+                  <tr key={tx.finpath_id} onClick={() => inspectTx(tx)} className="hover:bg-[#1E293B]/60 cursor-pointer">
+                    <td className="py-3 px-4 font-mono font-semibold text-[#22D3EE]">{tx.finpath_id}</td>
+                    <td className="py-3 px-3 font-mono">{String(tx.time).padStart(2, '0')}:00</td>
+                    <td className="py-3 px-3 font-mono">{tx.user_latency.toFixed(1)} ms</td>
+                    <td className="py-3 px-3 font-mono">{tx.server_latency.toFixed(1)} ms</td>
+                    <td className="py-3 px-3 font-mono">{tx.bank_latency.toFixed(1)} ms</td>
+                    <td className="py-3 px-3 font-mono">{tx.load.toLocaleString()}</td>
+                    <td className="py-3 px-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${tx.success === 1 ? 'bg-[#22C55E]/15 text-[#22C55E]' : 'bg-[#EF4444]/15 text-[#EF4444]'}`}>
+                        {tx.success === 1 ? 'Success' : 'Failed'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${tx.predicted_success === 1 ? 'bg-[#3B82F6]/15 text-[#22D3EE]' : 'bg-[#F59E0B]/15 text-[#F59E0B]'}`}>
+                        {tx.predicted_success === 1 ? 'Pred: Success' : 'Pred: Fail'} ({(tx.success_probability * 100).toFixed(0)}%)
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 font-mono">{tx.failed_node} {tx.predicted_failed_node !== tx.failed_node && <span className="text-[#22D3EE]">(ML: {tx.predicted_failed_node})</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {data && (
+              <div className="p-3.5 bg-[#101827] border-t border-[#1E293B] flex justify-between items-center text-xs">
+                <span className="text-[#94A3B8]">Page {data.page} of {data.total_pages} ({data.total.toLocaleString()} transactions)</span>
+                <div className="flex gap-2">
+                  <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1 rounded bg-[#151F30] border border-[#1E293B] disabled:opacity-40">Prev</button>
+                  <button disabled={page >= data.total_pages} onClick={() => setPage(page + 1)} className="px-3 py-1 rounded bg-[#151F30] border border-[#1E293B] disabled:opacity-40">Next</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Transaction Inspection Drawer */}
+          {selected && (
+            <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={() => setSelected(null)}>
+              <div className="w-full max-w-lg bg-[#101827] border-l border-[#1E293B] h-full p-6 overflow-y-auto space-y-5" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center border-b border-[#1E293B] pb-3">
+                  <div>
+                    <span className="text-xs font-mono text-[#22D3EE]">TRANSACTION DETAILS DRAWER</span>
+                    <h3 className="text-xl font-bold font-mono">{selected.finpath_id}</h3>
+                  </div>
+                  <button onClick={() => setSelected(null)} className="px-2.5 py-1 rounded bg-[#151F30] text-xs">Close ✕</button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3.5 rounded-xl bg-[#151F30] border border-[#1E293B]">
+                    <div className="text-[#94A3B8]">Actual Simulated Outcome</div>
+                    <div className={`text-base font-bold mt-1 ${selected.success === 1 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>{selected.success === 1 ? 'Succeeded' : 'Failed'}</div>
+                    <div className="mt-1 text-[#94A3B8]">Actual Node: <strong className="text-white font-mono">{selected.failed_node}</strong></div>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-[#151F30] border border-[#1E293B]">
+                    <div className="text-[#94A3B8]">Model 1 & 2 Prediction</div>
+                    <div className={`text-base font-bold mt-1 ${selected.predicted_success === 1 ? 'text-[#22D3EE]' : 'text-[#F59E0B]'}`}>{selected.predicted_success === 1 ? 'Predicted Success' : 'Predicted Failure'}</div>
+                    <div className="mt-1 text-[#94A3B8]">Predicted Node: <strong className="text-[#22D3EE] font-mono">{selected.predicted_failed_node}</strong></div>
+                  </div>
+                </div>
+                {detail && (
+                  <div className="space-y-3 text-xs">
+                    <div className="p-4 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-2">
+                      <div className="font-semibold text-[#22D3EE]">Live Model Summary</div>
+                      <p className="text-[#94A3B8]">{detail.live_analysis.summary}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-semibold text-[#94A3B8] uppercase">Parameter Comparison vs Training Data</div>
+                      {detail.live_analysis.parameter_breakdown.map(p => (
+                        <div key={p.feature} className="p-2.5 rounded-lg bg-[#151F30] border border-[#1E293B]">
+                          <div className="flex justify-between font-semibold">
+                            <span>{p.label}: {p.input_value} {p.unit}</span>
+                            <span className={p.is_elevated ? 'text-[#EF4444]' : 'text-[#22C55E]'}>{p.status}</span>
+                          </div>
+                          <div className="text-[#94A3B8] mt-0.5">{p.explanation}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ----------------- INTERACTIVE SIMULATOR TAB ----------------- */
+    const SimulatorTab = () => {
+      const [inputs, setInputs] = useState({ time: 20, user_latency: 52, server_latency: 114, bank_latency: 64, load: 22400 });
+      const [presets, setPresets] = useState([]);
+      const [result, setResult] = useState(null);
+      const [loading, setLoading] = useState(false);
+
+      useEffect(() => {
+        apiFetch('/api/simulator/presets').then(r => setPresets(r.presets));
+        runSim(inputs);
+      }, []);
+
+      const runSim = async (payload = inputs) => {
+        setLoading(true);
+        try {
+          const r = await apiFetch('/api/simulator/analyze', { method: 'POST', body: JSON.stringify(payload) });
+          setResult(r);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold">Interactive Transaction Simulator</h1>
+            <p className="text-xs text-[#94A3B8]">Experiment with transaction conditions to understand how latency and system load influence the model's predictions.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+            {presets.map(p => (
+              <button key={p.id} onClick={() => { setInputs(p.inputs); runSim(p.inputs); }} className="p-3 rounded-xl bg-[#151F30] border border-[#1E293B] hover:border-[#3B82F6] text-left">
+                <div className="text-xs font-bold">{p.name}</div>
+                <div className="text-[10px] font-mono text-[#22D3EE] mt-0.5">{p.badge}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-5 p-6 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-4">
+              <h2 className="text-sm font-bold border-b border-[#1E293B] pb-2">Configure Transaction Parameters</h2>
+              {[
+                { key: 'time', label: 'Transaction Hour (0–23 UTC)', min: 0, max: 23, step: 1, unit: 'h' },
+                { key: 'user_latency', label: 'User Latency (ms)', min: 10, max: 140, step: 0.5, unit: 'ms' },
+                { key: 'server_latency', label: 'Server Latency (ms)', min: 20, max: 160, step: 0.5, unit: 'ms' },
+                { key: 'bank_latency', label: 'Bank Latency (ms)', min: 15, max: 150, step: 0.5, unit: 'ms' },
+                { key: 'load', label: 'System Load (req/s)', min: 10000, max: 25000, step: 100, unit: 'req/s' },
+              ].map(f => (
+                <div key={f.key} className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span>{f.label}</span>
+                    <input type="number" value={inputs[f.key]} onChange={e => setInputs({ ...inputs, [f.key]: Number(e.target.value) })} className="w-24 px-2 py-0.5 rounded bg-[#0B1120] border border-[#1E293B] text-right font-mono text-[#22D3EE]" />
+                  </div>
+                  <input type="range" min={f.min} max={f.max} step={f.step} value={inputs[f.key]} onChange={e => setInputs({ ...inputs, [f.key]: Number(e.target.value) })} className="w-full accent-[#3B82F6]" />
+                </div>
+              ))}
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => runSim(inputs)} disabled={loading} className="flex-1 py-2.5 rounded-lg bg-[#3B82F6] hover:bg-[#2563EB] text-xs font-bold">
+                  {loading ? 'Analyzing...' : 'Analyze Transaction'}
+                </button>
+                <button onClick={() => { const d = { time: 14, user_latency: 50, server_latency: 70, bank_latency: 60, load: 17500 }; setInputs(d); runSim(d); }} className="px-4 py-2.5 rounded-lg bg-[#0B1120] border border-[#1E293B] text-xs">
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            <div className="lg:col-span-7 space-y-4">
+              {result && (
+                <>
+                  <div className={`p-5 rounded-xl border ${result.model1_prediction.predicted_class === 0 ? 'bg-[#EF4444]/10 border-[#EF4444]/40' : 'bg-[#22C55E]/10 border-[#22C55E]/40'} space-y-3`}>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-xs font-mono uppercase text-[#94A3B8]">Model 1 Verdict</span>
+                        <h3 className={`text-2xl font-bold ${result.model1_prediction.predicted_class === 0 ? 'text-[#EF4444]' : 'text-[#22C55E]'}`}>
+                          Predicted: {result.model1_prediction.predicted_outcome}
+                        </h3>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-[#94A3B8]">Model 2 Bottleneck Node</span>
+                        <div className="text-xl font-mono font-bold text-[#22D3EE]">{result.predicted_failure_component}</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-[#F8FAFC] bg-[#0B1120]/70 p-3 rounded-lg">{result.summary}</p>
+                    <div className="flex justify-between text-xs font-mono">
+                      <span className="text-[#22C55E]">Success Prob: {(result.model1_prediction.success_probability * 100).toFixed(1)}%</span>
+                      <span className="text-[#EF4444]">Failure Prob: {(result.model1_prediction.failure_probability * 100).toFixed(1)}%</span>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-3">
+                    <h3 className="text-sm font-bold">Model 2 Failure Node Class Probabilities</h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      {Object.entries(result.model2_prediction.class_probabilities).map(([k, v]) => (
+                        <div key={k} className="p-3 rounded-lg bg-[#0B1120] border border-[#1E293B] text-center">
+                          <div className="text-xs text-[#94A3B8]">{k} Node</div>
+                          <div className="text-lg font-bold font-mono text-[#22D3EE] mt-1">{(v * 100).toFixed(1)}%</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-2.5">
+                    <h3 className="text-sm font-bold">Input Elevation vs Training Data Distribution</h3>
+                    {result.parameter_breakdown.map(p => (
+                      <div key={p.feature} className="p-2.5 rounded-lg bg-[#0B1120] border border-[#1E293B] flex justify-between items-center text-xs">
+                        <div>
+                          <div className="font-semibold">{p.label}: <span className="font-mono text-[#22D3EE]">{p.input_value} {p.unit}</span></div>
+                          <div className="text-[#94A3B8]">{p.explanation}</div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded font-semibold ${p.is_elevated ? 'bg-[#EF4444]/15 text-[#EF4444]' : 'bg-[#22C55E]/15 text-[#22C55E]'}`}>{p.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    /* ----------------- FAILURE INTEL & BANK INSIGHTS & MODEL PERF ----------------- */
+    const FailureIntelTab = () => {
+      const [data, setData] = useState(null);
+      useEffect(() => { apiFetch('/api/insights/failures').then(setData); }, []);
+      if (!data) return <div className="p-8 text-xs text-[#94A3B8]">Loading failure intelligence...</div>;
+      return (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold">Failure Intelligence & Operational Insights</h1>
+            <p className="text-xs text-[#94A3B8]">Data-driven insights and operational recommendations generated from the 200,000 transaction dataset.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-5 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-3">
+              <h2 className="text-sm font-bold text-[#22D3EE]">Dynamic Operational Findings</h2>
+              {data.insights.map(ins => (
+                <div key={ins.id} className="p-3.5 rounded-lg bg-[#0B1120] border border-[#1E293B] space-y-1 text-xs">
+                  <div className="font-semibold text-[#F8FAFC]">{ins.title}</div>
+                  <p className="text-[#94A3B8]">{ins.detail}</p>
+                </div>
+              ))}
+            </div>
+            <div className="p-5 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-3">
+              <h2 className="text-sm font-bold text-[#22C55E]">Recommended Engineering Actions</h2>
+              {data.recommendations.map(rec => (
+                <div key={rec.id} className="p-3.5 rounded-lg bg-[#0B1120] border border-[#1E293B] space-y-1 text-xs">
+                  <div className="flex justify-between font-mono text-[11px] text-[#3B82F6]"><span>{rec.target}</span><span>Priority: {rec.priority}</span></div>
+                  <div className="font-semibold text-[#F8FAFC]">{rec.action}</div>
+                  <p className="text-[#94A3B8]">{rec.rationale}</p>
+                </div>
+              ))}
+              <div className="p-3 rounded-lg bg-[#0B1120] border border-[#F59E0B]/40 text-[11px] text-[#94A3B8]">{data.disclaimer}</div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const BankInsightsTab = () => {
+      const [hData, setHData] = useState(null);
+      useEffect(() => { apiFetch('/api/insights/hourly').then(setHData); }, []);
+      if (!hData) return <div className="p-8 text-xs text-[#94A3B8]">Loading bank insights heatmap...</div>;
+      const maxVal = hData.max_component_hourly_failures || 800;
+      const cellColor = (v) => {
+        const r = v / maxVal;
+        if (r > 0.75) return 'bg-[#EF4444] text-white font-bold';
+        if (r > 0.5) return 'bg-[#F59E0B]/80 text-white';
+        if (r > 0.25) return 'bg-[#3B82F6]/50 text-white';
+        return 'bg-[#0B1120] text-[#94A3B8]';
+      };
+      return (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold">Bank Insights & 24-Hour Failure Heatmap</h1>
+            <p className="text-xs text-[#94A3B8]">Peak Failure Hour: <strong className="text-[#EF4444] font-mono">{String(hData.peak_failure_hour).padStart(2, '0')}:00 UTC</strong>. Inspect hourly failure concentration across Server, Bank, and User layers.</p>
+          </div>
+          <div className="p-5 rounded-xl bg-[#151F30] border border-[#1E293B] overflow-x-auto space-y-3">
+            <h3 className="text-sm font-bold">Hourly Component Failure Heatmap (00:00 – 23:00 UTC)</h3>
+            <table className="w-full text-center border-separate border-spacing-1 text-xs">
+              <thead>
+                <tr>
+                  <th className="p-2 text-left text-[#94A3B8]">Component</th>
+                  {hData.hourly_distribution.map(h => <th key={h.hour} className="p-1 font-mono text-[10px] text-[#94A3B8]">{String(h.hour).padStart(2, '0')}h</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: 'Server Node', key: 'server_failures' },
+                  { label: 'Bank Gateway', key: 'bank_failures' },
+                  { label: 'User Edge', key: 'user_failures' }
+                ].map(row => (
+                  <tr key={row.key}>
+                    <td className="p-2 text-left font-semibold bg-[#0B1120] rounded">{row.label}</td>
+                    {hData.hourly_distribution.map(h => (
+                      <td key={h.hour} className={`p-2 rounded font-mono text-[11px] ${cellColor(h[row.key])}`}>{h[row.key]}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    };
+
+    const ModelPerformanceTab = () => {
+      const [m, setM] = useState(null);
+      useEffect(() => { apiFetch('/api/models/metrics').then(setM); }, []);
+      if (!m) return <div className="p-8 text-xs text-[#94A3B8]">Loading model evaluation metrics...</div>;
+      return (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold">Model Performance & Test-Set Validation</h1>
+            <p className="text-xs text-[#94A3B8]">{m.class_imbalance_explanation}</p>
+          </div>
+          {[m.model1, m.model2].map(mod => (
+            <div key={mod.model_name} className="p-6 rounded-xl bg-[#151F30] border border-[#1E293B] space-y-4">
+              <div className="flex justify-between items-center border-b border-[#1E293B] pb-3">
+                <div>
+                  <h2 className="text-lg font-bold">{mod.model_name}</h2>
+                  <p className="text-xs text-[#94A3B8]">{mod.algorithm} • {mod.task_type}</p>
+                </div>
+                <span className="text-xs font-mono text-[#22C55E]">Train: {mod.train_samples.toLocaleString()} | Test: {mod.test_samples.toLocaleString()}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="p-3 rounded-lg bg-[#0B1120] border border-[#1E293B]"><span className="text-[#94A3B8] block">Accuracy</span><span className="text-xl font-bold font-mono">{(mod.accuracy * 100).toFixed(2)}%</span></div>
+                <div className="p-3 rounded-lg bg-[#0B1120] border border-[#1E293B]"><span className="text-[#94A3B8] block">Precision (Macro)</span><span className="text-xl font-bold font-mono text-[#22D3EE]">{(mod.precision_macro * 100).toFixed(2)}%</span></div>
+                <div className="p-3 rounded-lg bg-[#0B1120] border border-[#1E293B]"><span className="text-[#94A3B8] block">Recall (Macro)</span><span className="text-xl font-bold font-mono text-[#3B82F6]">{(mod.recall_macro * 100).toFixed(2)}%</span></div>
+                <div className="p-3 rounded-lg bg-[#0B1120] border border-[#1E293B]"><span className="text-[#94A3B8] block">F1 Score (Macro)</span><span className="text-xl font-bold font-mono text-[#22C55E]">{(mod.f1_macro * 100).toFixed(2)}%</span></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-[#0B1120] border border-[#1E293B] space-y-2">
+                  <div className="text-xs font-bold">Feature Importance</div>
+                  {mod.feature_importance.map(fi => (
+                    <div key={fi.feature} className="space-y-1 text-xs">
+                      <div className="flex justify-between"><span>{fi.label}</span><span className="font-mono text-[#22D3EE]">{(fi.importance * 100).toFixed(1)}%</span></div>
+                      <div className="w-full h-2 rounded-full bg-[#151F30]"><div className="h-full rounded-full bg-[#3B82F6]" style={{ width: `${fi.importance * 100}%` }} /></div>
+                    </div>
+                  ))}
+                </div>
+                <div className="p-4 rounded-lg bg-[#0B1120] border border-[#1E293B] space-y-2">
+                  <div className="text-xs font-bold">Per-Class Classification Report</div>
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead><tr className="text-[#94A3B8] border-b border-[#1E293B]"><th className="py-1">Class</th><th>Prec</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead>
+                    <tbody>
+                      {mod.classification_report.map(r => (
+                        <tr key={r.class_name} className="border-b border-[#1E293B]/50">
+                          <td className="py-1.5 font-semibold">{r.class_name}</td>
+                          <td>{(r.precision * 100).toFixed(1)}%</td>
+                          <td>{(r.recall * 100).toFixed(1)}%</td>
+                          <td className="text-[#22C55E]">{(r.f1_score * 100).toFixed(1)}%</td>
+                          <td>{r.support.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    /* ----------------- MAIN APP SHELL ----------------- */
+    const App = () => {
+      const [user, setUser] = useState(null);
+      const [checking, setChecking] = useState(true);
+      const [tab, setTab] = useState('overview');
+      const [txFilter, setTxFilter] = useState(null);
+
+      useEffect(() => {
+        if (!getStoredToken()) { setChecking(false); return; }
+        apiFetch('/api/auth/me').then(setUser).catch(() => clearStoredToken()).finally(() => setChecking(false));
+      }, []);
+
+      const navigateTo = (targetTab, filter = null) => {
+        setTxFilter(filter);
+        setTab(targetTab);
+      };
+
+      if (checking) return <div className="min-h-screen bg-[#0B1120] flex items-center justify-center text-sm text-[#94A3B8]">Initializing FinPath AI...</div>;
+      if (!user) return <LoginScreen onAuthSuccess={setUser} />;
+
+      const navItems = [
+        { id: 'overview', label: '1. Overview' },
+        { id: 'transactions', label: '2. Transaction Monitor' },
+        { id: 'simulator', label: '3. AI Predictions & Simulator' },
+        { id: 'failure-intel', label: '4. Failure Intelligence' },
+        { id: 'bank-insights', label: '5. Bank Insights' },
+        { id: 'model-perf', label: '6. Model Performance' },
+      ];
+
+      return (
+        <div className="min-h-screen bg-[#0B1120] flex">
+          <aside className="w-64 bg-[#101827] border-r border-[#1E293B] flex flex-col justify-between p-4 shrink-0">
+            <div className="space-y-6">
+              <div className="flex items-center gap-2.5 px-2">
+                <div className="w-8 h-8 rounded-lg bg-[#3B82F6]/20 border border-[#3B82F6]/40 flex items-center justify-center font-bold text-xs text-[#22D3EE]">FP</div>
+                <div>
+                  <div className="font-bold text-sm">FINPATH <span className="text-[#22D3EE]">AI</span></div>
+                  <div className="text-[10px] text-[#94A3B8] uppercase">Transaction Intelligence</div>
+                </div>
+              </div>
+              <nav className="space-y-1">
+                {navItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => navigateTo(item.id)}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium transition ${tab === item.id ? 'bg-[#3B82F6]/15 text-[#22D3EE] border border-[#3B82F6]/30' : 'text-[#94A3B8] hover:text-white hover:bg-[#151F30]'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+            </div>
+            <div className="p-3 rounded-lg bg-[#151F30] border border-[#1E293B] text-xs space-y-2">
+              <div className="font-semibold truncate">{user.full_name}</div>
+              <div className="text-[11px] text-[#94A3B8] truncate">{user.email}</div>
+              <button onClick={() => { clearStoredToken(); setUser(null); }} className="w-full py-1.5 rounded bg-[#0B1120] border border-[#1E293B] text-[#EF4444] text-xs font-semibold">
+                Log Out
+              </button>
+            </div>
+          </aside>
+
+          <div className="flex-1 flex flex-col min-w-0">
+            <header className="h-14 bg-[#101827] border-b border-[#1E293B] px-6 flex items-center justify-between text-xs">
+              <span className="text-[#94A3B8]">
+                <strong className="text-white">Simulation Notice:</strong> All 200,000 initial transactions are simulated for demonstration purposes.
+              </span>
+              <div className="flex items-center gap-4">
+                <a href="/docs" target="_blank" className="text-[#22D3EE] hover:underline font-mono">Swagger API Docs ↗</a>
+                <span className="font-mono text-[#22C55E]">● Models Online</span>
+              </div>
+            </header>
+            <main className="p-6 max-w-7xl w-full mx-auto">
+              {tab === 'overview' && <OverviewTab onNavigate={navigateTo} />}
+              {tab === 'transactions' && <TransactionsTab initialFilter={txFilter} />}
+              {tab === 'simulator' && <SimulatorTab />}
+              {tab === 'failure-intel' && <FailureIntelTab />}
+              {tab === 'bank-insights' && <BankInsightsTab />}
+              {tab === 'model-perf' && <ModelPerformanceTab />}
+            </main>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
+

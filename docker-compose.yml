@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: finpath-backend
+    restart: unless-stopped
+    environment:
+      - PROJECT_NAME=FinPath AI — Transaction Intelligence Platform
+      - ENVIRONMENT=production
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-to-a-64-char-random-production-secret}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////workspace/backend/data/finpath.db}
+      - ARTIFACTS_DIR=/workspace/ml/artifacts
+      - DB_SEED_LIMIT=${DB_SEED_LIMIT:-25000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000}
+    volumes:
+      - finpath_db_data:/workspace/backend/data
+      - finpath_ml_artifacts:/workspace/ml/artifacts
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=""
+    container_name: finpath-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  finpath_db_data:
+  finpath_ml_artifacts:
+
