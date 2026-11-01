@@ -14,6 +14,28 @@ import {
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const TOKEN_KEY = 'finpath_jwt_token';
 
+async function fetchApi(
+  path: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  if (import.meta.env.PROD && !API_BASE) {
+    throw new Error(
+      'The FinPath API is not configured for this deployment. Set VITE_API_BASE_URL to a deployed backend URL to enable sign-in and API-backed features.'
+    );
+  }
+
+  try {
+    return await fetch(`${API_BASE}${path}`, options);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        `Could not connect to the FinPath API${API_BASE ? ` at ${API_BASE}` : ''}. Check that the backend is available and allows requests from this site.`
+      );
+    }
+    throw error;
+  }
+}
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
 }
@@ -44,7 +66,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetchApi(path, {
     ...options,
     headers,
   });
@@ -150,7 +172,7 @@ export const api = {
       query.set('hour', String(params.hour));
 
     const token = getStoredToken();
-    const res = await fetch(`${API_BASE}/api/transactions/export?${query.toString()}`, {
+    const res = await fetchApi(`/api/transactions/export?${query.toString()}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) throw new Error('Failed to export CSV');
@@ -217,4 +239,3 @@ export const api = {
 
   getHealth: () => request<Record<string, any>>('/health'),
 };
-

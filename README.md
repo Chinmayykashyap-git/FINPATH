@@ -113,7 +113,22 @@ Open http://localhost:5173 in your browser. Click **"Launch Interactive Demo Wor
 
 ---
 
-## 6. Cloud Deployment Guide (Render / Railway / AWS / DigitalOcean)
+## 6. GitHub Pages Frontend
+
+The React frontend deploys to [https://chinmayykashyap-git.github.io/FINPATH/](https://chinmayykashyap-git.github.io/FINPATH/) when changes are pushed to `main`. The workflow can also be started manually from **Actions → Deploy FINPATH to GitHub Pages → Run workflow**. In the repository’s **Settings → Pages**, set the build and deployment source to **GitHub Actions**.
+
+GitHub Pages only hosts the static frontend; it does not run the FastAPI backend. Without a deployed backend, the sign-in and API-backed features show a configuration/connectivity error rather than displaying fabricated live data. The transaction and model examples in this project are synthetic and are labeled as such.
+
+To connect a separately deployed backend:
+1. In **Settings → Secrets and variables → Actions → Variables**, add `VITE_API_BASE_URL` with the backend’s public origin (for example, `https://api.example.com`). Do not use a localhost URL.
+2. Configure the backend’s `CORS_ORIGINS` to allow `https://chinmayykashyap-git.github.io`.
+3. Push a commit or manually rerun the Pages workflow so Vite builds the frontend with the variable.
+
+The Pages build uses `frontend/package-lock.json` for reproducible installs. For a local production build, run `npm ci` and `npm run build` from `frontend/`.
+
+---
+
+## 7. Cloud Deployment Guide (Render / Railway / AWS / DigitalOcean)
 
 ### Required Production Environment Variables
 Configure the following variables in your cloud provider dashboard:

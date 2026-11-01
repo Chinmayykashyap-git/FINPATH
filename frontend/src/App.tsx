@@ -43,7 +43,7 @@ const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route
             path="/login"
@@ -85,4 +85,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-

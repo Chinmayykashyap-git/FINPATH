@@ -16,6 +16,7 @@ ml/artifacts/transactions_200k.csv
 # Node / Frontend
 frontend/node_modules/
 frontend/.vite/
+frontend/dist/
 finpath-ai.zip
 
 # Environment & OS
@@ -23,4 +24,3 @@ finpath-ai.zip
 .env.local
 .DS_Store
 Thumbs.db
-

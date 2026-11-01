@@ -166,10 +166,12 @@ export const DashboardLayout: React.FC = () => {
             </div>
           ) : (
             <div className="flex justify-center py-1">
-              <ShieldCheck
-                className="w-5 h-5 text-[#22C55E]"
-                title="ML Engine Active"
-              />
+              <span title="ML Engine Active">
+                <ShieldCheck
+                  className="w-5 h-5 text-[#22C55E]"
+                  aria-hidden="true"
+                />
+              </span>
             </div>
           )}
         </div>
@@ -314,4 +316,3 @@ export const DashboardLayout: React.FC = () => {
     </div>
   );
 };
-
