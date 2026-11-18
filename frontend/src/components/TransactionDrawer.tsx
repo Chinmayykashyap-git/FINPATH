@@ -153,7 +153,7 @@ export const TransactionDrawer: React.FC<TransactionDrawerProps> = ({
                 Model 1 Probability Breakdown
               </span>
               <span className="text-xs font-mono text-[#22D3EE]">
-                Random Forest (100 Trees)
+                Histogram Gradient Boosting
               </span>
             </div>
 
@@ -306,11 +306,10 @@ export const TransactionDrawer: React.FC<TransactionDrawerProps> = ({
 
         <div className="pt-4 mt-6 border-t border-[#1E293B] text-[11px] text-[#94A3B8]">
           Note: Actual status reflects the simulated Bernoulli outcome from the
-          synthetic dataset, while Predicted status reflects the Random Forest
-          model estimation.
+          synthetic dataset, while Predicted status reflects the trained model
+          estimation.
         </div>
       </div>
     </div>
   );
 };
-

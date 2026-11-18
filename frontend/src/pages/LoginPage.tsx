@@ -152,8 +152,8 @@ export const LoginPage: React.FC = () => {
                 1. Predict transaction outcomes.
               </h3>
               <p className="text-xs text-[#94A3B8] leading-relaxed">
-                Random Forest ensemble evaluates latency and system load to
-                estimate completion probability.
+                Gradient boosting evaluates latency and system load to estimate
+                completion probability.
               </p>
             </div>
 
@@ -189,7 +189,7 @@ export const LoginPage: React.FC = () => {
         <div className="mt-12 pt-6 border-t border-[#1E293B] flex flex-wrap items-center justify-between gap-4 text-xs text-[#94A3B8]">
           <span>200,000 Simulated Transactions Analyzed</span>
           <span className="font-mono text-[#22D3EE]">
-            Dual-Stage Scikit-Learn Random Forest Pipeline
+            Two-Model Scikit-Learn Prediction Pipeline
           </span>
         </div>
       </div>
@@ -423,4 +423,3 @@ export const LoginPage: React.FC = () => {
     </div>
   );
 };
-

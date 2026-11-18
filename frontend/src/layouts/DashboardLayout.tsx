@@ -250,7 +250,7 @@ export const DashboardLayout: React.FC = () => {
                     </div>
                     <div className="p-2.5 rounded-lg bg-[#0B1120] border border-[#1E293B]">
                       <div className="font-medium text-[#22C55E]">
-                        Random Forest Artifacts Verified
+                        Model Artifacts Verified
                       </div>
                       <div className="text-[#94A3B8] mt-0.5">
                         Model 1 & Model 2 loaded with fixed random_state=42.
@@ -304,7 +304,7 @@ export const DashboardLayout: React.FC = () => {
             </span>
           </div>
           <span className="hidden md:inline font-mono text-[11px] text-[#22D3EE]">
-            Seed: 42 | Models: RandomForestClassifier
+            Seed: 42 | Models: HistGradientBoosting + RandomForest
           </span>
         </div>
 

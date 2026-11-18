@@ -80,11 +80,17 @@ def _ensure_transactions_seeded(db: Session) -> None:
 
     # Batch inference using loaded Model 1 and Model 2 (vectorized, fast)
     X_slice = df_slice[FEATURES]
-    m1_preds = ml_engine.model1.predict(X_slice)
     m1_probs = ml_engine.model1.predict_proba(X_slice)
     m1_classes = list(ml_engine.model1.classes_)
     idx_fail = m1_classes.index(0) if 0 in m1_classes else 0
     idx_succ = m1_classes.index(1) if 1 in m1_classes else 1
+    failure_threshold = float(
+        ml_engine.evaluation_metrics.get("model1", {}).get(
+            "failure_decision_threshold",
+            0.5,
+        )
+    )
+    m1_preds = np.where(m1_probs[:, idx_fail] >= failure_threshold, 0, 1)
 
     m2_preds = ml_engine.model2.predict(X_slice)
 
@@ -121,4 +127,3 @@ def _ensure_transactions_seeded(db: Session) -> None:
         db.bulk_insert_mappings(Transaction, records[start : start + chunk_size])
     db.commit()
     print(f"[FinPath DB] Seeded {len(records):,} transactions into relational database.")
-

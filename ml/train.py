@@ -2,8 +2,9 @@
 """
 FinPath AI — Machine Learning Training & Artifact Pipeline
 ==========================================================
-Trains both Random Forest models on the 200,000 synthetic transaction dataset
-using stratified train/test splitting and fixed random seeds (`SEED = 42`),
+Trains a histogram gradient boosting success predictor and a Random Forest
+failure-node analyzer on the 200,000 synthetic transaction dataset using
+stratified train/test splitting and fixed random seeds (`SEED = 42`),
 evaluates performance on the held-out test sets, computes dataset-wide
 operational analytics, and saves all artifacts to `ml/artifacts/`.
 """
@@ -14,7 +15,8 @@ from typing import Any, Dict, Tuple
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.metrics import f1_score
 from sklearn.model_selection import train_test_split
 
 from ml.generate_data import (
@@ -29,6 +31,28 @@ from ml.evaluate import (
     evaluate_model1,
     evaluate_model2,
 )
+
+
+def select_failure_threshold(
+    model: Any,
+    X_validation: pd.DataFrame,
+    y_validation: pd.Series,
+) -> float:
+    """Choose the failure-probability threshold that maximizes validation F1."""
+    classes = list(model.classes_)
+    failure_index = classes.index(0)
+    failure_probabilities = model.predict_proba(X_validation)[:, failure_index]
+    actual_failures = (y_validation == 0).astype(int).to_numpy()
+
+    best_threshold = 0.5
+    best_f1 = -1.0
+    for threshold in np.arange(0.05, 0.951, 0.005):
+        predicted_failures = (failure_probabilities >= threshold).astype(int)
+        score = f1_score(actual_failures, predicted_failures, zero_division=0)
+        if score > best_f1:
+            best_f1 = score
+            best_threshold = float(threshold)
+    return best_threshold
 
 
 def compute_operational_analytics(df: pd.DataFrame) -> Dict[str, Any]:
@@ -334,14 +358,45 @@ def train_and_save_all(
         stratify=y,
     )
 
-    print("[FinPath ML] Training Model 1 (Transaction Success Predictor)...")
-    model1 = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=14,
-        min_samples_split=10,
-        class_weight="balanced_subsample",
+    X_fit, X_validation, y_fit, y_validation = train_test_split(
+        X_train,
+        y_train,
+        test_size=0.20,
         random_state=seed,
-        n_jobs=-1,
+        stratify=y_train,
+    )
+
+    print("[FinPath ML] Tuning Model 1 failure threshold on validation data...")
+    threshold_model = HistGradientBoostingClassifier(
+        max_iter=250,
+        learning_rate=0.08,
+        max_leaf_nodes=63,
+        min_samples_leaf=20,
+        l2_regularization=1.0,
+        class_weight="balanced",
+        early_stopping=True,
+        random_state=seed,
+    )
+    threshold_model.fit(X_fit, y_fit)
+    failure_threshold = select_failure_threshold(
+        threshold_model,
+        X_validation,
+        y_validation,
+    )
+
+    print(
+        f"[FinPath ML] Training Model 1 with tuned failure threshold "
+        f"{failure_threshold:.3f}..."
+    )
+    model1 = HistGradientBoostingClassifier(
+        max_iter=250,
+        learning_rate=0.08,
+        max_leaf_nodes=63,
+        min_samples_leaf=20,
+        l2_regularization=1.0,
+        class_weight="balanced",
+        early_stopping=True,
+        random_state=seed,
     )
     model1.fit(X_train, y_train)
 
@@ -375,7 +430,14 @@ def train_and_save_all(
     # Evaluate both models & compute metadata
     # ---------------------------------------------------------
     print("[FinPath ML] Evaluating models on held-out stratified test sets...")
-    m1_metrics = evaluate_model1(model1, X_test, y_test, X_train, y_train)
+    m1_metrics = evaluate_model1(
+        model1,
+        X_test,
+        y_test,
+        X_train,
+        y_train,
+        failure_threshold=failure_threshold,
+    )
     m2_metrics = evaluate_model2(model2, X2_test, y2_test, X2_train, y2_train)
 
     evaluation_payload = {
@@ -421,4 +483,3 @@ def train_and_save_all(
 
 if __name__ == "__main__":
     train_and_save_all()
-

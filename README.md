@@ -6,10 +6,11 @@
 
 ## 1. Executive Overview
 
-**FinPath AI** transforms a 200,000-row synthetic financial transaction telemetry dataset and a dual-stage Scikit-Learn **Random Forest** machine learning pipeline into a full-stack enterprise SaaS application:
+**FinPath AI** transforms a 200,000-row synthetic financial transaction telemetry dataset and a two-model Scikit-Learn pipeline into a full-stack transaction intelligence application:
 
-1. **Model 1 — Transaction Success Predictor (`RandomForestClassifier`)**:
-   - Evaluates 5 real-time telemetry parameters (`time`, `user_latency`, `server_latency`, `bank_latency`, `load`) to estimate the probability of transaction completion (`1 = Success`, `0 = Failure`).
+1. **Model 1 — Transaction Success Predictor (`HistGradientBoostingClassifier`)**:
+   - Evaluates 5 telemetry parameters (`time`, `user_latency`, `server_latency`, `bank_latency`, `load`) to estimate the probability of transaction completion (`1 = Success`, `0 = Failure`).
+   - Selects its failure decision threshold by maximizing failure-class F1 on an internal stratified validation split; final metrics are measured on the separate held-out test set.
 2. **Model 2 — Failure Node Analyzer (`RandomForestClassifier`)**:
    - For transactions predicted to fail (or under diagnostic inspection), estimates class probabilities across the three infrastructure nodes (`User`, `Server`, `Bank`) to isolate the primary bottleneck layer.
 
@@ -27,7 +28,7 @@
 | **Seed Reproducibility** | Only `np.random.seed(42)` set (`random.randint` unseeded) | Both `random.seed(42)`, `np.random.seed(42)`, and `default_rng(42)` fixed |
 | **Failure Probability Logic** | Max failure probability capped at `0.14` (`assign_failure`), causing severe class starvation | Vectorized threshold + continuous excess severity scaling clamped to `[0.005, 0.985]` |
 | **Train/Test Splitting** | Unseeded, unstratified `train_test_split(X, y, test_size=0.2)` | Stratified `train_test_split(..., stratify=y, random_state=42)` |
-| **Class Imbalance** | Default unweighted Random Forest | `class_weight="balanced_subsample"` with Precision, Recall, F1, Confusion Matrices |
+| **Class Imbalance** | Default unweighted Random Forest | Balanced class weighting, validation-tuned failure threshold, and held-out Precision, Recall, F1, Confusion Matrices |
 | **Model Persistence** | Retrained from scratch on every script execution | Saved via `joblib` (`model1_success.joblib`, `model2_failure_node.joblib`) and loaded once at FastAPI startup |
 
 ---
@@ -95,7 +96,7 @@ finpath-ai/
 # From the repository root
 pip install -r backend/requirements.txt
 
-# Train both Random Forest models on 200,000 synthetic transactions and save artifacts
+# Train both models on 200,000 synthetic transactions and save artifacts
 python -m ml.train
 
 # Start the FastAPI server (auto-seeds SQLite database on first startup)

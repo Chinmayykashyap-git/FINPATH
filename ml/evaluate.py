@@ -21,6 +21,7 @@ from sklearn.metrics import (
     confusion_matrix,
     classification_report,
 )
+from sklearn.inspection import permutation_importance
 
 FEATURES = ["time", "user_latency", "server_latency", "bank_latency", "load"]
 
@@ -59,9 +60,13 @@ def evaluate_model1(
     y_test: pd.Series,
     X_train: pd.DataFrame,
     y_train: pd.Series,
+    failure_threshold: float = 0.5,
 ) -> Dict[str, Any]:
     """Evaluate Model 1 (Transaction Success Predictor) on the held-out test set."""
-    y_pred = model1.predict(X_test)
+    classes = list(model1.classes_)
+    failure_index = classes.index(0)
+    failure_probabilities = model1.predict_proba(X_test)[:, failure_index]
+    y_pred = np.where(failure_probabilities >= failure_threshold, 0, 1)
     labels = [0, 1]
     label_names = ["Failure (0)", "Success (1)"]
 
@@ -75,6 +80,27 @@ def evaluate_model1(
         zero_division=0,
     )
 
+    if hasattr(model1, "feature_importances_"):
+        raw_importances = model1.feature_importances_
+        importance_method = "native"
+    else:
+        importance_sample = X_train.sample(
+            n=min(10_000, len(X_train)),
+            random_state=42,
+        )
+        importance_labels = y_train.loc[importance_sample.index]
+        permutation = permutation_importance(
+            model1,
+            importance_sample,
+            importance_labels,
+            scoring="roc_auc",
+            n_repeats=3,
+            random_state=42,
+            n_jobs=-1,
+        )
+        raw_importances = permutation.importances_mean
+        importance_method = "permutation_roc_auc"
+
     importances = [
         {
             "feature": feat,
@@ -82,13 +108,13 @@ def evaluate_model1(
             "importance": round(float(imp), 4),
             "description": FEATURE_DESCRIPTIONS[feat]["description"],
         }
-        for feat, imp in zip(FEATURES, model1.feature_importances_)
+        for feat, imp in zip(FEATURES, raw_importances)
     ]
     importances.sort(key=lambda x: x["importance"], reverse=True)
 
     return {
         "model_name": "Model 1: Transaction Success Predictor",
-        "algorithm": "Random Forest Classifier",
+        "algorithm": "Histogram-based Gradient Boosting Classifier",
         "task_type": "Binary Classification (0 = Failure, 1 = Success)",
         "train_samples": int(len(X_train)),
         "test_samples": int(len(X_test)),
@@ -101,6 +127,9 @@ def evaluate_model1(
         "precision_weighted": round(float(precision_score(y_test, y_pred, average="weighted", zero_division=0)), 4),
         "recall_weighted": round(float(recall_score(y_test, y_pred, average="weighted", zero_division=0)), 4),
         "f1_weighted": round(float(f1_score(y_test, y_pred, average="weighted", zero_division=0)), 4),
+        "failure_decision_threshold": round(float(failure_threshold), 4),
+        "threshold_selection": "Maximum failure-class F1 on an internal stratified validation split",
+        "feature_importance_method": importance_method,
         "failure_class_metrics": {
             "precision": round(float(report_dict["Failure"]["precision"]), 4),
             "recall": round(float(report_dict["Failure"]["recall"]), 4),
@@ -139,9 +168,11 @@ def evaluate_model1(
         ],
         "feature_importance": importances,
         "hyperparameters": {
-            "n_estimators": int(model1.n_estimators),
-            "max_depth": model1.max_depth,
-            "min_samples_split": int(model1.min_samples_split),
+            "max_iter": int(model1.max_iter),
+            "learning_rate": float(model1.learning_rate),
+            "max_leaf_nodes": int(model1.max_leaf_nodes),
+            "min_samples_leaf": int(model1.min_samples_leaf),
+            "l2_regularization": float(model1.l2_regularization),
             "class_weight": str(model1.class_weight),
             "random_state": int(model1.random_state),
         },
@@ -253,4 +284,3 @@ def compute_feature_metadata(df: pd.DataFrame) -> Dict[str, Any]:
             "p99": round(float(percentiles[7]), 2),
         }
     return stats
-

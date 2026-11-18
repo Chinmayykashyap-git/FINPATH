@@ -182,16 +182,24 @@ export const ModelPerformancePage: React.FC = () => {
           <div className="flex items-start justify-between">
             <div>
               <h3 className="text-sm font-bold text-[#F8FAFC]">
-                Gini Feature Importance Ranking
+                {model.algorithm.includes('Gradient Boosting')
+                  ? 'Permutation Feature Importance'
+                  : 'Gini Feature Importance Ranking'}
               </h3>
               <p className="text-xs text-[#94A3B8]">
-                Relative contribution of each input variable to tree splits
+                {model.algorithm.includes('Gradient Boosting')
+                  ? 'Change in validation ROC AUC when a feature is shuffled'
+                  : 'Relative contribution of each input variable to tree splits'}
               </p>
             </div>
             <InfoTooltip
               title="Feature Importance"
-              whatItRepresents="Normalized mean decrease in impurity (Gini importance) across all 100 decision trees."
-              howToInterpret="Higher bars indicate features that drive the largest reduction in classification uncertainty."
+              whatItRepresents={
+                model.algorithm.includes('Gradient Boosting')
+                  ? 'Mean change in ROC AUC when each feature is shuffled in a training sample.'
+                  : 'Normalized mean decrease in impurity (Gini importance) across the Random Forest trees.'
+              }
+              howToInterpret="Higher bars indicate features that contribute more to the model's predictions."
               whyItMatters="Confirms that Server Latency, Bank Latency, and System Load are the primary drivers of model decisions."
             />
           </div>
@@ -291,7 +299,7 @@ export const ModelPerformancePage: React.FC = () => {
         </h1>
         <p className="text-sm text-[#94A3B8] mt-1">
           Reproducible test-set evaluation metrics, confusion matrices, and
-          feature importance rankings for both Random Forest classifiers.
+          feature importance rankings for both classifiers.
         </p>
       </div>
 
@@ -326,4 +334,3 @@ export const ModelPerformancePage: React.FC = () => {
     </div>
   );
 };
-

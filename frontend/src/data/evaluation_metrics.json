@@ -1,0 +1,216 @@
+{
+  "random_state": 42,
+  "dataset_size": 200000,
+  "test_split_ratio": 0.2,
+  "stratified_split": true,
+  "class_imbalance_explanation": "In payment processing, successful transactions outnumber failures (~88% vs ~12%). Because of this class imbalance, a naive classifier predicting 'Success' for every transaction would still achieve ~88% accuracy while catching 0% of failures. Therefore, Precision, Recall, F1 Score on the Failure class, and balanced class weights are essential for evaluating operational utility.",
+  "model1": {
+    "model_name": "Model 1: Transaction Success Predictor",
+    "algorithm": "Histogram-based Gradient Boosting Classifier",
+    "task_type": "Binary Classification (0 = Failure, 1 = Success)",
+    "train_samples": 160000,
+    "test_samples": 40000,
+    "positive_class_rate_train": 0.8623,
+    "failure_class_rate_train": 0.1377,
+    "accuracy": 0.83,
+    "precision_macro": 0.6757,
+    "recall_macro": 0.7364,
+    "f1_macro": 0.6968,
+    "precision_weighted": 0.8617,
+    "recall_weighted": 0.83,
+    "f1_weighted": 0.8424,
+    "failure_decision_threshold": 0.67,
+    "threshold_selection": "Maximum failure-class F1 on an internal stratified validation split",
+    "feature_importance_method": "permutation_roc_auc",
+    "failure_class_metrics": {
+      "precision": 0.419,
+      "recall": 0.6071,
+      "f1_score": 0.4958,
+      "support": 5508
+    },
+    "success_class_metrics": {
+      "precision": 0.9324,
+      "recall": 0.8656,
+      "f1_score": 0.8978,
+      "support": 34492
+    },
+    "confusion_matrix": {
+      "labels": [
+        "Failure (0)",
+        "Success (1)"
+      ],
+      "matrix": [
+        [
+          3344,
+          2164
+        ],
+        [
+          4636,
+          29856
+        ]
+      ],
+      "true_failure_pred_failure": 3344,
+      "true_failure_pred_success": 2164,
+      "true_success_pred_failure": 4636,
+      "true_success_pred_success": 29856
+    },
+    "classification_report": [
+      {
+        "class_name": "Failure (0)",
+        "precision": 0.419,
+        "recall": 0.6071,
+        "f1_score": 0.4958,
+        "support": 5508
+      },
+      {
+        "class_name": "Success (1)",
+        "precision": 0.9324,
+        "recall": 0.8656,
+        "f1_score": 0.8978,
+        "support": 34492
+      }
+    ],
+    "feature_importance": [
+      {
+        "feature": "load",
+        "label": "Concurrent System Load",
+        "importance": 0.2088,
+        "description": "Active concurrent transactions per second across the platform. Loads above 20,000 req/s increase queue contention."
+      },
+      {
+        "feature": "server_latency",
+        "label": "Server Processing Latency",
+        "importance": 0.0859,
+        "description": "Internal microservice orchestration and validation time. Values above 90ms indicate server processing contention."
+      },
+      {
+        "feature": "bank_latency",
+        "label": "Bank Gateway Latency",
+        "importance": 0.0541,
+        "description": "Response time from the upstream acquiring/issuing bank network. Values above 80ms correlate strongly with timeout failures."
+      },
+      {
+        "feature": "user_latency",
+        "label": "User Network Latency",
+        "importance": 0.0257,
+        "description": "Round-trip network latency between the customer device and the FinPath edge gateway. Baseline mean is ~50ms."
+      },
+      {
+        "feature": "time",
+        "label": "Transaction Hour (0\u201323)",
+        "importance": 0.0142,
+        "description": "Hour of the day when the transaction was initiated. Peak evening hours (18:00\u201322:00) experience elevated concurrency."
+      }
+    ],
+    "hyperparameters": {
+      "max_iter": 250,
+      "learning_rate": 0.08,
+      "max_leaf_nodes": 63,
+      "min_samples_leaf": 20,
+      "l2_regularization": 1.0,
+      "class_weight": "balanced",
+      "random_state": 42
+    }
+  },
+  "model2": {
+    "model_name": "Model 2: Failure Node Analyzer",
+    "algorithm": "Random Forest Classifier",
+    "task_type": "Multi-class Classification (User, Server, Bank)",
+    "train_samples": 22031,
+    "test_samples": 5508,
+    "accuracy": 0.9929,
+    "precision_macro": 0.9812,
+    "recall_macro": 0.9927,
+    "f1_macro": 0.9868,
+    "precision_weighted": 0.993,
+    "recall_weighted": 0.9929,
+    "f1_weighted": 0.9929,
+    "confusion_matrix": {
+      "labels": [
+        "User",
+        "Server",
+        "Bank"
+      ],
+      "matrix": [
+        [
+          346,
+          2,
+          1
+        ],
+        [
+          13,
+          3637,
+          14
+        ],
+        [
+          3,
+          6,
+          1486
+        ]
+      ]
+    },
+    "classification_report": [
+      {
+        "class_name": "User",
+        "precision": 0.9558,
+        "recall": 0.9914,
+        "f1_score": 0.9733,
+        "support": 349
+      },
+      {
+        "class_name": "Server",
+        "precision": 0.9978,
+        "recall": 0.9926,
+        "f1_score": 0.9952,
+        "support": 3664
+      },
+      {
+        "class_name": "Bank",
+        "precision": 0.99,
+        "recall": 0.994,
+        "f1_score": 0.992,
+        "support": 1495
+      }
+    ],
+    "feature_importance": [
+      {
+        "feature": "server_latency",
+        "label": "Server Processing Latency",
+        "importance": 0.3721,
+        "description": "Internal microservice orchestration and validation time. Values above 90ms indicate server processing contention."
+      },
+      {
+        "feature": "bank_latency",
+        "label": "Bank Gateway Latency",
+        "importance": 0.3326,
+        "description": "Response time from the upstream acquiring/issuing bank network. Values above 80ms correlate strongly with timeout failures."
+      },
+      {
+        "feature": "user_latency",
+        "label": "User Network Latency",
+        "importance": 0.2772,
+        "description": "Round-trip network latency between the customer device and the FinPath edge gateway. Baseline mean is ~50ms."
+      },
+      {
+        "feature": "load",
+        "label": "Concurrent System Load",
+        "importance": 0.0127,
+        "description": "Active concurrent transactions per second across the platform. Loads above 20,000 req/s increase queue contention."
+      },
+      {
+        "feature": "time",
+        "label": "Transaction Hour (0\u201323)",
+        "importance": 0.0054,
+        "description": "Hour of the day when the transaction was initiated. Peak evening hours (18:00\u201322:00) experience elevated concurrency."
+      }
+    ],
+    "hyperparameters": {
+      "n_estimators": 100,
+      "max_depth": 14,
+      "min_samples_split": 8,
+      "class_weight": "balanced_subsample",
+      "random_state": 42
+    },
+    "labeling_methodology_note": "Synthetic Labeling Note: In this simulated dataset, failed transactions are labeled with the component ('User', 'Server', or 'Bank') exhibiting the highest raw latency during the transaction. This represents a synthetic heuristic rather than verified production trace root-cause attribution."
+  }
+}

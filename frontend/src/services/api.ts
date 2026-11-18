@@ -10,31 +10,12 @@ import {
   TransactionDetailResponse,
   User,
 } from '../types';
+import { embeddedEngine } from './embeddedEngine';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const TOKEN_KEY = 'finpath_jwt_token';
 
-async function fetchApi(
-  path: string,
-  options: RequestInit = {}
-): Promise<Response> {
-  if (import.meta.env.PROD && !API_BASE) {
-    throw new Error(
-      'The FinPath API is not configured for this deployment. Set VITE_API_BASE_URL to a deployed backend URL to enable sign-in and API-backed features.'
-    );
-  }
-
-  try {
-    return await fetch(`${API_BASE}${path}`, options);
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new Error(
-        `Could not connect to the FinPath API${API_BASE ? ` at ${API_BASE}` : ''}. Check that the backend is available and allows requests from this site.`
-      );
-    }
-    throw error;
-  }
-}
+const USE_EMBEDDED_DIRECTLY = import.meta.env.PROD && !API_BASE;
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
@@ -55,7 +36,15 @@ export function clearStoredToken(): void {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function requestWithFallback<T>(
+  path: string,
+  options: RequestInit,
+  fallbackFn: () => T | Promise<T>
+): Promise<T> {
+  if (USE_EMBEDDED_DIRECTLY) {
+    return await fallbackFn();
+  }
+
   const token = getStoredToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -66,58 +55,82 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetchApi(path, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    let errorDetail = `Request failed (${response.status})`;
-    try {
-      const errJson = await response.json();
-      if (errJson.detail) {
-        errorDetail =
-          typeof errJson.detail === 'string'
-            ? errJson.detail
-            : JSON.stringify(errJson.detail);
+    if (!response.ok) {
+      let errorDetail = `Request failed (${response.status})`;
+      try {
+        const errJson = await response.json();
+        if (errJson.detail) {
+          errorDetail =
+            typeof errJson.detail === 'string'
+              ? errJson.detail
+              : JSON.stringify(errJson.detail);
+        }
+      } catch {
+        // ignore JSON parse error
       }
-    } catch {
-      // fallback to status text
+      throw new Error(errorDetail);
     }
-    throw new Error(errorDetail);
-  }
 
-  return response.json() as Promise<T>;
+    return (await response.json()) as T;
+  } catch (err) {
+    if (err instanceof TypeError) {
+      return await fallbackFn();
+    }
+    throw err;
+  }
 }
 
 export const api = {
   // Authentication
   login: (email: string, password: string, remember_me = true) =>
-    request<AuthTokenResponse>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, remember_me }),
-    }),
+    requestWithFallback<AuthTokenResponse>(
+      '/api/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password, remember_me }),
+      },
+      () => embeddedEngine.login(email, password)
+    ),
 
   register: (full_name: string, email: string, password: string) =>
-    request<AuthTokenResponse>('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ full_name, email, password }),
-    }),
+    requestWithFallback<AuthTokenResponse>(
+      '/api/auth/register',
+      {
+        method: 'POST',
+        body: JSON.stringify({ full_name, email, password }),
+      },
+      () => embeddedEngine.register(full_name, email, password)
+    ),
 
   demoLogin: () =>
-    request<AuthTokenResponse>('/api/auth/demo', {
-      method: 'POST',
-    }),
+    requestWithFallback<AuthTokenResponse>(
+      '/api/auth/demo',
+      { method: 'POST' },
+      () => embeddedEngine.demoLogin()
+    ),
 
-  getMe: () => request<User>('/api/auth/me'),
+  getMe: () =>
+    requestWithFallback<User>('/api/auth/me', {}, () => embeddedEngine.getMe()),
 
   // Dashboard
   getDashboardSummary: () =>
-    request<DashboardSummaryResponse>('/api/dashboard/summary'),
+    requestWithFallback<DashboardSummaryResponse>(
+      '/api/dashboard/summary',
+      {},
+      () => embeddedEngine.getDashboardSummary()
+    ),
 
   getDashboardCharts: (startHour = 0, endHour = 23) =>
-    request<DashboardChartsResponse>(
-      `/api/dashboard/charts?start_hour=${startHour}&end_hour=${endHour}`
+    requestWithFallback<DashboardChartsResponse>(
+      `/api/dashboard/charts?start_hour=${startHour}&end_hour=${endHour}`,
+      {},
+      () => embeddedEngine.getDashboardCharts(startHour, endHour)
     ),
 
   // Transactions
@@ -147,11 +160,19 @@ export const api = {
     if (params.sort_by) query.set('sort_by', params.sort_by);
     if (params.sort_order) query.set('sort_order', params.sort_order);
 
-    return request<PaginatedTransactions>(`/api/transactions?${query.toString()}`);
+    return requestWithFallback<PaginatedTransactions>(
+      `/api/transactions?${query.toString()}`,
+      {},
+      () => embeddedEngine.getTransactions(params)
+    );
   },
 
   getTransactionDetail: (txId: string) =>
-    request<TransactionDetailResponse>(`/api/transactions/${encodeURIComponent(txId)}`),
+    requestWithFallback<TransactionDetailResponse>(
+      `/api/transactions/${encodeURIComponent(txId)}`,
+      {},
+      () => embeddedEngine.getTransactionDetail(txId)
+    ),
 
   exportTransactionsCsv: async (params: {
     search?: string;
@@ -160,6 +181,11 @@ export const api = {
     failed_node?: string;
     hour?: number | '';
   }) => {
+    if (USE_EMBEDDED_DIRECTLY) {
+      embeddedEngine.exportTransactionsCsv(params);
+      return;
+    }
+
     const query = new URLSearchParams();
     if (params.search) query.set('search', params.search);
     if (params.status_filter && params.status_filter !== 'all')
@@ -171,20 +197,27 @@ export const api = {
     if (params.hour !== undefined && params.hour !== '')
       query.set('hour', String(params.hour));
 
-    const token = getStoredToken();
-    const res = await fetchApi(`/api/transactions/export?${query.toString()}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error('Failed to export CSV');
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `finpath_transactions_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
+    try {
+      const token = getStoredToken();
+      const res = await fetch(
+        `${API_BASE}/api/transactions/export?${query.toString()}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      if (!res.ok) throw new Error('Failed to export CSV');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `finpath_transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      embeddedEngine.exportTransactionsCsv(params);
+    }
   },
 
   // Predictions & Simulator
@@ -195,47 +228,65 @@ export const api = {
     bank_latency: number;
     load: number;
   }) =>
-    request<FullAnalysisResult>('/api/simulator/analyze', {
-      method: 'POST',
-      body: JSON.stringify(inputs),
-    }),
+    requestWithFallback<FullAnalysisResult>(
+      '/api/simulator/analyze',
+      {
+        method: 'POST',
+        body: JSON.stringify(inputs),
+      },
+      () => embeddedEngine.analyzeTransaction(inputs)
+    ),
 
   getSimulatorPresets: () =>
-    request<{
+    requestWithFallback<{
       presets: SimulatorPreset[];
       feature_metadata: Record<string, any>;
-    }>('/api/simulator/presets'),
+    }>('/api/simulator/presets', {}, () => embeddedEngine.getSimulatorPresets()),
 
   // Insights
   getFailureIntelligence: () =>
-    request<FailureIntelligenceResponse>('/api/insights/failures'),
+    requestWithFallback<FailureIntelligenceResponse>(
+      '/api/insights/failures',
+      {},
+      () => embeddedEngine.getFailureIntelligence()
+    ),
 
   getHourlyInsights: () =>
-    request<{
+    requestWithFallback<{
       peak_failure_hour: number;
       hourly_distribution: any[];
       max_component_hourly_failures: number;
       disclaimer: string;
-    }>('/api/insights/hourly'),
+    }>('/api/insights/hourly', {}, () => embeddedEngine.getHourlyInsights()),
 
   getComponentInsights: () =>
-    request<{
+    requestWithFallback<{
       most_problematic_component: string;
       component_distribution: any[];
       latency_comparison: any[];
       load_analysis: any[];
       disclaimer: string;
-    }>('/api/insights/components'),
+    }>('/api/insights/components', {}, () =>
+      embeddedEngine.getComponentInsights()
+    ),
 
   // Models
-  getModelMetrics: () => request<ModelMetricsResponse>('/api/models/metrics'),
+  getModelMetrics: () =>
+    requestWithFallback<ModelMetricsResponse>('/api/models/metrics', {}, () =>
+      embeddedEngine.getModelMetrics()
+    ),
 
   getFeatureImportance: () =>
-    request<{
+    requestWithFallback<{
       model1_feature_importance: any[];
       model2_feature_importance: any[];
       feature_metadata: Record<string, any>;
-    }>('/api/models/feature-importance'),
+    }>('/api/models/feature-importance', {}, () =>
+      embeddedEngine.getFeatureImportance()
+    ),
 
-  getHealth: () => request<Record<string, any>>('/health'),
+  getHealth: () =>
+    requestWithFallback<Record<string, any>>('/health', {}, () =>
+      embeddedEngine.getHealth()
+    ),
 };

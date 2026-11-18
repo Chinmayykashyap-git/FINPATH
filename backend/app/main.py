@@ -3,8 +3,8 @@
 FinPath AI — Production FastAPI Application Entrypoint
 ======================================================
 Integrates JWT authentication, SQLite/PostgreSQL database persistence,
-and trained Random Forest models for transaction success prediction and
-failure node attribution.
+and trained gradient boosting and Random Forest models for transaction
+success prediction and failure node attribution.
 """
 
 from contextlib import asynccontextmanager
@@ -96,5 +96,4 @@ def serve_spa(full_path: str):
     if index_file.exists():
         return FileResponse(str(index_file))
     return {"message": "FinPath AI Backend API is running. Visit /docs for Swagger UI."}
-
 

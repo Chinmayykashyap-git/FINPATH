@@ -66,7 +66,7 @@ export const AIPredictionsPage: React.FC = () => {
             AI Predictions & Dual-Model Pipeline
           </h1>
           <p className="text-sm text-[#94A3B8] mt-1">
-            Inspect how FinPath AI&apos;s two-stage Random Forest pipeline
+            Inspect how FinPath AI&apos;s two-model machine-learning pipeline
             evaluates transaction conditions and attributes potential failure
             nodes.
           </p>
@@ -140,7 +140,7 @@ export const AIPredictionsPage: React.FC = () => {
               <div className="p-3 rounded-lg bg-[#0B1120] border border-[#1E293B]">
                 <span className="text-[#94A3B8] block">Model Type</span>
                 <span className="font-semibold text-[#F8FAFC] font-mono">
-                  Random Forest Classifier
+                  Histogram Gradient Boosting
                 </span>
               </div>
               <div className="p-3 rounded-lg bg-[#0B1120] border border-[#1E293B]">
@@ -180,7 +180,7 @@ export const AIPredictionsPage: React.FC = () => {
                   </div>
                   <div className="text-right">
                     <div className="text-xs text-[#94A3B8]">
-                      Ensemble Vote Agreement
+                      Prediction Confidence
                     </div>
                     <div className="text-lg font-mono font-bold text-[#F8FAFC]">
                       {(m1.ensemble_agreement * 100).toFixed(1)}%
@@ -235,9 +235,10 @@ export const AIPredictionsPage: React.FC = () => {
               <strong className="text-[#F8FAFC]">
                 Note on Model Confidence:
               </strong>{' '}
-              Ensemble probabilities represent the fraction of decision trees
-              voting for each outcome based on synthetic training patterns. They
-              are statistical estimates and do not guarantee certainty.
+              Probabilities are statistical estimates learned from synthetic
+              training patterns, not guarantees of real transaction outcomes.
+              The failure classification threshold was tuned on a separate
+              validation split.
             </span>
           </div>
         </div>
@@ -419,4 +420,3 @@ export const AIPredictionsPage: React.FC = () => {
     </div>
   );
 };
-

@@ -41,9 +41,10 @@ const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({
 };
 
 export const App: React.FC = () => {
+  const baseName = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/';
   return (
     <AuthProvider>
-      <BrowserRouter basename={import.meta.env.BASE_URL}>
+      <BrowserRouter basename={baseName}>
         <Routes>
           <Route
             path="/login"

@@ -2,9 +2,9 @@
 """
 FinPath AI — Machine Learning Inference & Artifact Engine
 =========================================================
-Loads pre-trained scikit-learn Random Forest models (`model1_success.joblib`
-and `model2_failure_node.joblib`) and evaluation artifacts once at server
-startup and serves low-latency predictions and training-set comparisons.
+Loads pre-trained scikit-learn models (`model1_success.joblib` and
+`model2_failure_node.joblib`) and evaluation artifacts once at server startup
+and serves low-latency predictions and training-set comparisons.
 """
 
 import json
@@ -119,7 +119,13 @@ class MLEngine:
         prob_map = {int(cls): float(p) for cls, p in zip(classes, probs)}
         fail_prob = round(prob_map.get(0, 0.0), 4)
         succ_prob = round(prob_map.get(1, 1.0 - fail_prob), 4)
-        predicted_class = int(self.model1.predict(X_in)[0])
+        failure_threshold = float(
+            self.evaluation_metrics.get("model1", {}).get(
+                "failure_decision_threshold",
+                0.5,
+            )
+        )
+        predicted_class = 0 if fail_prob >= failure_threshold else 1
         predicted_label = "Success" if predicted_class == 1 else "Failure"
 
         # Prediction margin / ensemble agreement estimate (not guaranteed certainty)
@@ -132,8 +138,8 @@ class MLEngine:
             "failure_probability": fail_prob,
             "ensemble_agreement": round(dominant_prob, 4),
             "confidence_note": (
-                "Probabilities reflect the proportion of decision trees in the Random Forest ensemble "
-                "voting for each class on synthetic training data; they do not represent guaranteed certainty."
+                "Probabilities are model estimates learned from synthetic training data, not guaranteed "
+                "outcomes. The failure classification uses a threshold tuned on a separate validation split."
             ),
         }
 
@@ -311,4 +317,3 @@ class MLEngine:
 
 
 ml_engine = MLEngine()
-
